@@ -216,16 +216,48 @@ export function setupMaskLayer(ctx: TrailCtx): void {
 
   if (magnetism) {
     if (isTouchDevice()) {
-      const onTouch = (e: TouchEvent): void => {
+      // Instantly reveal every cell in the card under a touch point.
+      // Called on touchstart so a single tap is enough to fully expose the card.
+      const revealCard = (tx: number, ty: number, nowMs: number): void => {
+        const gcW = Math.round(gridConfig.gridCellPx * dpr);
+        for (const c of cachedCards) {
+          if (tx < c.x || tx >= c.x + c.w || ty < c.y || ty >= c.y + c.h) continue;
+          const gcFirst = Math.floor(c.x / gcW);
+          const gcLast  = Math.ceil((c.x + c.w) / gcW);
+          const grFirst = Math.floor(c.y / gcW);
+          const grLast  = Math.ceil((c.y + c.h) / gcW);
+          for (let gr = grFirst; gr <= grLast; gr++)
+            for (let gc = gcFirst; gc <= gcLast; gc++) {
+              const key = `${gc},${gr}`;
+              if (!revealedCells.has(key)) revealedCells.set(key, nowMs);
+            }
+        }
+      };
+
+      const onTouchStart = (e: TouchEvent): void => {
         if (e.touches.length === 0) return;
         gsap.killTweensOf(lensState);
         lensState.mul = 1;
         const nowMs = performance.now();
-        // Use first touch point to update cursor position (for glitch pass).
         const t0 = e.touches[0];
         curX = t0.clientX * dpr;
         curY = t0.clientY * dpr;
-        // Reveal at every active touch point that is over a card.
+        // On tap: reveal the entire card under each finger instantly.
+        for (let i = 0; i < e.touches.length; i++) {
+          const t = e.touches[i];
+          revealCard(t.clientX * dpr, t.clientY * dpr, nowMs);
+        }
+      };
+
+      const onTouchMove = (e: TouchEvent): void => {
+        if (e.touches.length === 0) return;
+        gsap.killTweensOf(lensState);
+        lensState.mul = 1;
+        const nowMs = performance.now();
+        const t0 = e.touches[0];
+        curX = t0.clientX * dpr;
+        curY = t0.clientY * dpr;
+        // While dragging: reveal cells around each finger (scratch-off).
         for (let i = 0; i < e.touches.length; i++) {
           const t = e.touches[i];
           const tx = t.clientX * dpr;
@@ -236,8 +268,9 @@ export function setupMaskLayer(ctx: TrailCtx): void {
           if (overCard) revealAt(tx, ty, nowMs);
         }
       };
-      window.addEventListener("touchstart", onTouch, { passive: true, signal: ctx.signal });
-      window.addEventListener("touchmove", onTouch, { passive: true, signal: ctx.signal });
+
+      window.addEventListener("touchstart", onTouchStart, { passive: true, signal: ctx.signal });
+      window.addEventListener("touchmove", onTouchMove, { passive: true, signal: ctx.signal });
       window.addEventListener(
         "touchend",
         () => {
