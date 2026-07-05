@@ -217,13 +217,24 @@ export function setupMaskLayer(ctx: TrailCtx): void {
   if (magnetism) {
     if (isTouchDevice()) {
       const onTouch = (e: TouchEvent): void => {
-        const t = e.touches[0];
-        if (!t) return;
-        curX = t.clientX * dpr;
-        curY = t.clientY * dpr;
+        if (e.touches.length === 0) return;
         gsap.killTweensOf(lensState);
         lensState.mul = 1;
-        revealAt(curX, curY, performance.now());
+        const nowMs = performance.now();
+        // Use the first touch point to update cursor position (for glitch pass).
+        const t0 = e.touches[0];
+        curX = t0.clientX * dpr;
+        curY = t0.clientY * dpr;
+        // Reveal at every active touch point that is over a card.
+        for (let i = 0; i < e.touches.length; i++) {
+          const t = e.touches[i];
+          const tx = t.clientX * dpr;
+          const ty = t.clientY * dpr;
+          const overCard = cachedCards.some(
+            c => tx >= c.x && tx < c.x + c.w && ty >= c.y && ty < c.y + c.h
+          );
+          if (overCard) revealAt(tx, ty, nowMs);
+        }
       };
       window.addEventListener("touchstart", onTouch, { passive: true, signal: ctx.signal });
       window.addEventListener("touchmove", onTouch, { passive: true, signal: ctx.signal });
