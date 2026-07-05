@@ -216,20 +216,26 @@ export function setupMaskLayer(ctx: TrailCtx): void {
 
   if (magnetism) {
     if (isTouchDevice()) {
+      // Mirror the Y-mapping from input.ts: the trail positions cards using
+      // mapTouchY (bottom half → full viewport). Reveal must use the same
+      // mapped Y so cells land exactly on the card, not offset below it.
+      const mapTouchY = (rawY: number): number =>
+        Math.max(0, (rawY - window.innerHeight / 2) * 2);
+
       const onTouch = (e: TouchEvent): void => {
         if (e.touches.length === 0) return;
         gsap.killTweensOf(lensState);
         lensState.mul = 1;
         const nowMs = performance.now();
-        // Use the first touch point to update cursor position (for glitch pass).
+        // Use first touch for glitch-pass cursor (mapped coords).
         const t0 = e.touches[0];
         curX = t0.clientX * dpr;
-        curY = t0.clientY * dpr;
+        curY = mapTouchY(t0.clientY) * dpr;
         // Reveal at every active touch point that is over a card.
         for (let i = 0; i < e.touches.length; i++) {
           const t = e.touches[i];
           const tx = t.clientX * dpr;
-          const ty = t.clientY * dpr;
+          const ty = mapTouchY(t.clientY) * dpr;
           const overCard = cachedCards.some(
             c => tx >= c.x && tx < c.x + c.w && ty >= c.y && ty < c.y + c.h
           );
