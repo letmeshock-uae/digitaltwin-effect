@@ -21,20 +21,11 @@ export interface InputApi {
 }
 
 export function setupInput(ctx: TrailCtx, dismissal: DismissalApi): InputApi {
-  // Map a raw touch y into the trail's render y. The bottom half of
-  // the viewport ([vh/2, vh]) is the control surface — strokes there
-  // paint across the entire viewport ([0, vh]). Touches above the
-  // midline clamp to render-y 0 (the top) so they're never lost off
-  // screen and the user can comfortably draw without straying.
-  function mapTouchY(rawY: number): number {
-    return Math.max(0, (rawY - window.innerHeight / 2) * 2);
-  }
-
   function handleTouchStart(e: TouchEvent): void {
     if (!ctx.imageTrail || ctx.animationPaused || ctx.isToggling) return;
     const touch = e.touches[0];
     const x = touch.clientX;
-    const y = mapTouchY(touch.clientY);
+    const y = touch.clientY;
     ctx.mousePos = { x, y };
     ctx.lastMousePos = { x, y };
     if (ctx.isHidingImages) {
@@ -57,7 +48,7 @@ export function setupInput(ctx: TrailCtx, dismissal: DismissalApi): InputApi {
     if (e.cancelable) e.preventDefault();
     const touch = e.touches[0];
     const x = touch.clientX;
-    const y = mapTouchY(touch.clientY);
+    const y = touch.clientY;
     ctx.mousePos = { x, y };
 
     if (ctx.idleTimer) clearTimeout(ctx.idleTimer);
