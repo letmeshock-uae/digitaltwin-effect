@@ -1,0 +1,180 @@
+/* ===== Image trail core (from vshslv.com src/styles/image-trail.css) ===== */
+
+.image-wrap {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.content__img {
+  /* [SIZE] One modular UNIT per breakpoint drives every thumb: both orientations
+     fit inside a unit×unit box (horizontal = unit WIDE, vertical = unit TALL), so
+     the LARGEST possible thumb is exactly --trail-unit. The per-spawn size tiers
+     (TRAIL_SIZE_TIERS in image-trail/config.ts) only ever scale DOWN from it, so
+     nothing exceeds the unit. Stepped by breakpoint in rem — NOT a fluid vw —
+     so the pool's cached rects (ImageEl.rect, captured once at mount) stay
+     valid without a resize recompute. */
+  --trail-unit: 15rem;
+  --img-width: var(--trail-unit);
+  --img-height: auto;
+  width: var(--img-width);
+  height: var(--img-height);
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  overflow: hidden;
+  /* The clearing thumb can fold edge-on around its vertical axis (rotationY,
+     see [FOLD-HIDE] in config.ts) — hide the mirrored back face so once the
+     fold passes 90° the thumb is simply gone. Load-bearing for the "fold"
+     dismissal style: there's no opacity fade, so the fold collapsing past
+     edge-on is the ENTIRE vanish. */
+  backface-visibility: hidden;
+  will-change: transform, filter;
+  background-size: cover;
+  background-position: center;
+  /* The trail is driven by document-level mousemove, never by hovering a
+     thumbnail — so the (often opacity:0 but still painted) images must not
+     intercept pointer events. */
+  pointer-events: none;
+}
+.content__img--horizontal {
+  --img-width: var(--trail-unit);
+  --img-height: calc(var(--trail-unit) * 3 / 4);
+}
+.content__img--vertical {
+  --img-width: calc(var(--trail-unit) * 3 / 4);
+  --img-height: var(--trail-unit);
+}
+
+/* [SIZE] Step the modular unit DOWN per breakpoint — the single knob that scales
+   the whole trail (both orientations derive from it above). Smaller viewports get
+   a smaller unit so a thumb never spans the screen and the swipe-down arc reads as
+   an arc, not an overlapping stack. */
+@media screen and (max-width: 991px) {
+  .content__img {
+    --trail-unit: 13rem;
+  }
+}
+@media screen and (max-width: 767px) {
+  .content__img {
+    --trail-unit: 11rem;
+  }
+}
+@media screen and (max-width: 479px) {
+  .content__img {
+    --trail-unit: 9rem;
+  }
+}
+
+/* [MASK] The card painter (image-trail/mask-layer.ts) — one full-bleed canvas
+   that draws the cover-mapped slice of the hidden mask.mp4 into every visible
+   card box. Sits above the (empty, transparent) .content__img boxes, whose
+   inline zIndex grows per spawn from 1 — never near this. */
+.trail-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000000000;
+  pointer-events: none;
+}
+
+/* ===== ASCII backdrop (from vshslv.com src/styles/links.css) ===== */
+
+.hero-video {
+  pointer-events: none;
+  object-fit: cover;
+  width: 100%;
+  height: 100vh;
+  position: fixed;
+  inset: 0%;
+  overflow: hidden;
+}
+
+/* The ASCII backdrop (ascii/ascii-video.ts) — a full-bleed canvas over the
+   .hero-video that repaints the frame as monospace glyphs filled with the live
+   video, black between them. It is a MODE: transparent (opacity 0) at rest so
+   the real video shows through, crossfaded IN when the image trail engages and
+   OUT when it clears. Same box as the video; inserted right after it so (both
+   z-auto) it paints on top, while the .image-wrap thumbs + demo copy (later in
+   the DOM) still sit above. The canvas paints its own black per frame
+   (compositing), so no background-color is needed — at opacity 0 it's fully
+   transparent. On Chromium/Firefox it's a trail-driven mode (rest = transparent
+   over the video); on WebKit the WebGL fork keeps it opacity:1 and crossfades
+   in-shader (ascii/ascii-video-webgl.ts). */
+.hero-ascii {
+  pointer-events: none;
+  width: 100%;
+  height: 100vh;
+  position: fixed;
+  inset: 0%;
+  opacity: 0;
+  will-change: opacity;
+}
+
+/* ===== Page base ===== */
+
+:root {
+  /* The single page-edge inset (vshslv.com tokens.css --edge-inset) — the
+     loader bar starts/ends on this x, not flush to the screen edge. */
+  --edge-inset: 0.625rem;
+  --z-loader: 9999;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  color: #fff;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  overflow: hidden;
+  /* The touch path preventDefaults its own moves; this stops rubber-banding. */
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+/* ===== First-paint loader (from vshslv.com loader.css) ===== */
+
+/* A black first-paint cover with a single 1px line that sweeps left→right
+   along the 45svh hero line, then drops so the ASCII "develop"
+   (ascii/ascii-video.ts) resolves the video out of the glyph field.
+   shared/page-loader.ts drives the sweep and, on completion, adds
+   .loader--done + fires the `loaderFinished` contract. */
+.loader {
+  z-index: var(--z-loader);
+  position: fixed;
+  inset: 0;
+  /* The SAME black as the body base and the ASCII develop's start state — so
+     dropping this cover reveals an identical black underneath and the handoff
+     to the glyph develop is seamless (black → black, no flash). */
+  background-color: #000;
+  /* Purely visual — never traps input. */
+  pointer-events: none;
+}
+.loader--done {
+  display: none;
+}
+
+/* The pixel line. INSET from both page edges by --edge-inset, so the line
+   starts and ends on the same x as page chrome, NOT flush to the screen edge.
+   The left→right sweep is scaleX 0→1 (page-loader.ts, GSAP) — GPU-composited,
+   grown from the left inset (transform-origin left). The scaleY(0.5) is the
+   crisp sub-pixel line: the browser rasterises the 1px box then scales it 0.5
+   in Y — a guaranteed sharp line on every DPR (DPR=1 = a half-pixel that can't
+   round to 0; DPR≥2 = one physical pixel, not two). */
+.loader_progress {
+  position: absolute;
+  top: 45svh;
+  left: var(--edge-inset);
+  right: var(--edge-inset);
+  height: 1px;
+  transform: scaleX(0) scaleY(0.5);
+  transform-origin: left top;
+  background-color: #fff;
+}

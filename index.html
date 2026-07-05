@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Trail Lab</title>
+  </head>
+  <body>
+    <!-- First-paint loader (shared/page-loader.ts): a black cover with a 1px
+         line that sweeps left→right along the 45svh hero line (style.css),
+         then drops + fires `loaderFinished` so the ASCII develop plays. -->
+    <div class="loader" aria-hidden="true">
+      <div class="loader_progress"></div>
+    </div>
+
+    <!-- The ASCII backdrop source (placeholder clip). No src here — main.ts
+         promotes data-src-mp4 via pickBgVideoSrc on non-WebKit only; on
+         WebKit the WebGL path owns its own hidden copy of this element's
+         data-* (the visible video must never play there — WebKit's video
+         overlay would occlude the glyph canvas). The .hero-ascii canvas is
+         inserted right after this element by ascii-video(.webgl).ts. -->
+    <video
+      class="hero-video"
+      data-src-mp4="/media/background.mp4"
+      muted
+      playsinline
+      loop
+      preload="auto"
+      aria-hidden="true"
+    ></video>
+
+    <!-- The thumbnail pool mount. main.ts fills it with .content__img nodes
+         from the data list (POOL_REPEAT× so the on-screen snake is long
+         enough), then hands it to setupImageTrail. -->
+    <div class="image-wrap"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

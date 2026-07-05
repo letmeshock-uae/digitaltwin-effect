@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Scan Overlay — Grid Displacement Tool</title>
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --panel:#111214;
+    --line:#2a2c30;
+    --text:#d8dadd;
+    --text-dim:#7a7d82;
+    --accent:#e8e8e8;
+    --mono: 'IBM Plex Mono','SF Mono',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:12px;
+    overflow:hidden;
+  }
+  #app{
+    display:flex;
+    height:100vh;
+    width:100vw;
+  }
+  #sidebar{
+    width:300px;
+    min-width:300px;
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    padding:18px;
+    overflow-y:auto;
+  }
+  #sidebar::-webkit-scrollbar{width:6px;}
+  #sidebar::-webkit-scrollbar-thumb{background:#2c2e32;}
+
+  .title{
+    font-size:11px;
+    letter-spacing:1.5px;
+    color:var(--accent);
+    text-transform:uppercase;
+    margin-bottom:2px;
+  }
+  .subtitle{
+    font-size:10px;
+    color:var(--text-dim);
+    margin-bottom:20px;
+    letter-spacing:0.5px;
+  }
+
+  .group{
+    margin-bottom:18px;
+    padding-bottom:14px;
+    border-bottom:1px solid var(--line);
+  }
+  .group:last-of-type{border-bottom:none;}
+
+  .group-label{
+    font-size:10px;
+    color:var(--text-dim);
+    letter-spacing:1px;
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+
+  .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:10px;
+    gap:8px;
+  }
+  .row label{
+    font-size:11px;
+    color:var(--text);
+    flex:1;
+  }
+  .row .val{
+    font-size:10px;
+    color:var(--text-dim);
+    min-width:40px;
+    text-align:right;
+  }
+  input[type=range]{
+    flex:1.4;
+    -webkit-appearance:none;
+    height:2px;
+    background:var(--line);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:10px;height:10px;
+    background:var(--accent);
+    border-radius:50%;
+    cursor:pointer;
+  }
+  input[type=color]{
+    width:28px;height:20px;
+    border:1px solid var(--line);
+    background:none;
+    padding:0;
+    cursor:pointer;
+  }
+
+  #fileBtn, .btn{
+    display:block;
+    width:100%;
+    padding:10px;
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    cursor:pointer;
+    text-align:center;
+    margin-bottom:8px;
+    transition:border-color 0.15s, color 0.15s;
+  }
+  #fileBtn:hover, .btn:hover{
+    border-color:var(--accent);
+    color:#fff;
+  }
+  .btn.primary{
+    background:var(--accent);
+    color:#0a0a0a;
+    border-color:var(--accent);
+  }
+  .btn.primary:hover{
+    background:#fff;
+  }
+  #fileInput{display:none;}
+
+  #canvasWrap{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      linear-gradient(45deg,#0d0d0d 25%,transparent 25%),
+      linear-gradient(-45deg,#0d0d0d 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#0d0d0d 75%),
+      linear-gradient(-45deg,transparent 75%,#0d0d0d 75%);
+    background-size:20px 20px;
+    background-position:0 0,0 10px,10px -10px,-10px 0px;
+    background-color:#050505;
+    position:relative;
+    overflow:hidden;
+  }
+  #canvasHolder{
+    box-shadow:0 0 0 1px var(--line), 0 40px 80px rgba(0,0,0,0.6);
+    max-width:90%;
+    max-height:90vh;
+  }
+  canvas{
+    display:block;
+    max-width:100%;
+    max-height:90vh;
+  }
+  #emptyState{
+    color:var(--text-dim);
+    text-align:center;
+    font-size:11px;
+    letter-spacing:0.5px;
+    line-height:1.8;
+  }
+  #emptyState .big{
+    font-size:13px;
+    color:var(--text);
+    margin-bottom:6px;
+    letter-spacing:1px;
+  }
+  #status{
+    position:absolute;
+    top:14px;
+    left:18px;
+    font-size:10px;
+    color:var(--text-dim);
+    letter-spacing:0.5px;
+  }
+  .checkrow{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .checkrow input{accent-color:var(--accent);}
+  .checkrow label{font-size:11px;color:var(--text);}
+  .hint{
+    font-size:9.5px;
+    color:var(--text-dim);
+    line-height:1.5;
+    margin-top:2px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div class="title">Scan Overlay</div>
+    <div class="subtitle">grid displacement · uv markers · hud</div>
+
+    <div class="group">
+      <button id="fileBtn">↑ Загрузить фото</button>
+      <input type="file" id="fileInput" accept="image/*">
+      <button class="btn" id="regenBtn">↻ Пересчитать (новый seed)</button>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Сетка / Displacement</div>
+      <div class="row"><label>Колонки</label><input type="range" id="cols" min="4" max="20" value="10"><span class="val" id="colsVal">10</span></div>
+      <div class="row"><label>Строки</label><input type="range" id="rows" min="4" max="24" value="12"><span class="val" id="rowsVal">12</span></div>
+      <div class="row"><label>Неровность сетки</label><input type="range" id="jitter" min="0" max="60" value="25"><span class="val" id="jitterVal">25%</span></div>
+      <div class="row"><label>% смещённых ячеек</label><input type="range" id="dispProb" min="0" max="60" value="22"><span class="val" id="dispProbVal">22%</span></div>
+      <div class="row"><label>Сила смещения</label><input type="range" id="dispAmt" min="10" max="90" value="45"><span class="val" id="dispAmtVal">45%</span></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Точки / линии</div>
+      <div class="row"><label>Кол-во точек</label><input type="range" id="ptCount" min="10" max="120" value="45"><span class="val" id="ptCountVal">45</span></div>
+      <div class="row"><label>% точек с линией</label><input type="range" id="lineProb" min="0" max="80" value="35"><span class="val" id="lineProbVal">35%</span></div>
+      <div class="row"><label>% точек с подписью</label><input type="range" id="labelProb" min="0" max="100" value="45"><span class="val" id="labelProbVal">45%</span></div>
+      <div class="row"><label>Кол-во рамок</label><input type="range" id="boxCount" min="0" max="14" value="6"><span class="val" id="boxCountVal">6</span></div>
+      <div class="hint">Точки смещены к контрастным зонам фото (края, границы объектов)</div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Стиль</div>
+      <div class="row"><label>Цвет линий</label><input type="color" id="lineColor" value="#f2f2f2"></div>
+      <div class="row"><label>Непрозрачность</label><input type="range" id="lineOpacity" min="10" max="100" value="55"><span class="val" id="lineOpacityVal">55%</span></div>
+      <div class="checkrow"><input type="checkbox" id="desaturate" checked><label>Приглушить цвет фото</label></div>
+      <div class="checkrow"><input type="checkbox" id="darken" checked><label>Затемнить фон</label></div>
+      <div class="checkrow"><input type="checkbox" id="isoCube" checked><label>Изометрический куб (угол)</label></div>
+      <div class="checkrow"><input type="checkbox" id="showBoxes" checked><label>Показывать рамки</label></div>
+      <div class="checkrow"><input type="checkbox" id="showGridGhost" checked><label>Тонкая сетка фоном</label></div>
+    </div>
+
+    <div class="group">
+      <button class="btn primary" id="downloadBtn">↓ Скачать PNG</button>
+    </div>
+  </div>
+
+  <div id="canvasWrap">
+    <div id="status"></div>
+    <div id="canvasHolder">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+    <div id="emptyState">
+      <div class="big">НЕТ ИЗОБРАЖЕНИЯ</div>
+      Загрузите фото слева,<br>чтобы применить scan-overlay
+    </div>
+  </div>
+</div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const fileBtn = document.getElementById('fileBtn');
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+const emptyState = document.getElementById('emptyState');
+const canvasHolder = document.getElementById('canvasHolder');
+const statusEl = document.getElementById('status');
+
+let img = null;
+let seed = Math.random();
+
+// ---- controls ----
+const controls = ['cols','rows','jitter','dispProb','dispAmt','ptCount','lineProb','labelProb','boxCount','lineOpacity'];
+controls.forEach(id=>{
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(id+'Val');
+  el.addEventListener('input', ()=>{
+    updateLabel(id, valEl);
+    render();
+  });
+  updateLabel(id, valEl);
+});
+function updateLabel(id, valEl){
+  const el = document.getElementById(id);
+  const pctIds = ['jitter','dispProb','dispAmt','lineProb','labelProb','lineOpacity'];
+  valEl.textContent = pctIds.includes(id) ? el.value+'%' : el.value;
+}
+
+['lineColor','desaturate','darken','isoCube','showBoxes','showGridGhost'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', render);
+  document.getElementById(id).addEventListener('change', render);
+});
+
+fileBtn.addEventListener('click', ()=>fileInput.click());
+fileInput.addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const url = URL.createObjectURL(file);
+  const im = new Image();
+  im.onload = ()=>{
+    img = im;
+    emptyState.style.display = 'none';
+    canvasHolder.style.display = 'block';
+    render();
+  };
+  im.src = url;
+});
+
+document.getElementById('regenBtn').addEventListener('click', ()=>{
+  seed = Math.random();
+  render();
+});
+
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  if(!img){ alert('Сначала загрузите фото'); return; }
+  const link = document.createElement('a');
+  link.download = 'scan_overlay.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+// seeded RNG so "regenerate" gives new results but a given seed is reproducible mid-render
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+canvasHolder.style.display = 'none';
+
+function render(){
+  if(!img) return;
+
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  canvas.width = W;
+  canvas.height = H;
+
+  const rand = mulberry32(Math.floor(seed*1e9));
+
+  const cols = +document.getElementById('cols').value;
+  const rows = +document.getElementById('rows').value;
+  const jitter = +document.getElementById('jitter').value/100;
+  const dispProb = +document.getElementById('dispProb').value/100;
+  const dispAmt = +document.getElementById('dispAmt').value/100;
+  const ptCount = +document.getElementById('ptCount').value;
+  const lineProb = +document.getElementById('lineProb').value/100;
+  const labelProb = +document.getElementById('labelProb').value/100;
+  const boxCount = +document.getElementById('boxCount').value;
+  const lineColor = document.getElementById('lineColor').value;
+  const lineOpacity = +document.getElementById('lineOpacity').value/100;
+  const desaturate = document.getElementById('desaturate').checked;
+  const darken = document.getElementById('darken').checked;
+  const isoCube = document.getElementById('isoCube').checked;
+  const showBoxes = document.getElementById('showBoxes').checked;
+  const showGridGhost = document.getElementById('showGridGhost').checked;
+
+  statusEl.textContent = `${W}×${H} · grid ${cols}×${rows} · seed ${seed.toFixed(4)}`;
+
+  // 1. base image
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(img,0,0,W,H);
+
+  if(desaturate){
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#0a0a0a';
+    ctx.globalCompositeOperation = 'saturation';
+    // saturation blend needs a fully saturated overlay approach; simpler: draw desaturated copy
+    ctx.restore();
+    desaturateCanvas(ctx, W, H, 0.55);
+  }
+  if(darken){
+    ctx.save();
+    ctx.fillStyle = 'rgba(5,5,8,0.28)';
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
+  // 2. build jittered grid line positions
+  const xLines = buildJitteredLines(cols, W, jitter, rand);
+  const yLines = buildJitteredLines(rows, H, jitter, rand);
+
+  // 3. displacement pass — redraw selected cells from an offset source rect
+  for(let i=0;i<cols;i++){
+    for(let j=0;j<rows;j++){
+      if(rand() < dispProb){
+        const dx0 = xLines[i], dx1 = xLines[i+1];
+        const dy0 = yLines[j], dy1 = yLines[j+1];
+        const cw = dx1-dx0, ch = dy1-dy0;
+        const offX = (rand()*2-1) * cw * dispAmt;
+        const offY = (rand()*2-1) * ch * dispAmt;
+        const scale = 0.92 + rand()*0.24;
+
+        const sw = cw*scale, sh = ch*scale;
+        let sx = dx0 + offX, sy = dy0 + offY;
+        sx = Math.max(0, Math.min(W-sw, sx));
+        sy = Math.max(0, Math.min(H-sh, sy));
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(dx0, dy0, cw, ch);
+        ctx.clip();
+        ctx.drawImage(img, sx, sy, sw, sh, dx0, dy0, cw, ch);
+        if(darken){
+          ctx.fillStyle = 'rgba(5,5,8,0.15)';
+          ctx.fillRect(dx0,dy0,cw,ch);
+        }
+        ctx.restore();
+
+        // hairline cell edge to sell the seam
+        ctx.save();
+        ctx.strokeStyle = `rgba(255,255,255,0.12)`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(dx0+0.5, dy0+0.5, cw, ch);
+        ctx.restore();
+      }
+    }
+  }
+
+  // 4. ghost grid (very faint, full grid)
+  if(showGridGhost){
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    xLines.forEach(x=>{
+      ctx.beginPath(); ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,H); ctx.stroke();
+    });
+    yLines.forEach(y=>{
+      ctx.beginPath(); ctx.moveTo(0,y+0.5); ctx.lineTo(W,y+0.5); ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  // 5. feature points biased toward contrast/edges
+  const edgeMap = buildEdgeMap(img, 90);
+  const points = [];
+  for(let n=0;n<ptCount;n++){
+    let px, py, tries=0;
+    do{
+      px = rand()*W; py = rand()*H;
+      tries++;
+    } while(tries<6 && sampleEdge(edgeMap, px/W, py/H) < rand()*0.5);
+    points.push({x:px, y:py, u: px/W, v: 1-(py/H)});
+  }
+
+  // 6. lines between nearby points
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(lineColor, lineOpacity*0.8);
+  ctx.lineWidth = 1;
+  points.forEach((p,idx)=>{
+    if(rand() < lineProb){
+      // connect to nearest other point within radius
+      let best=null, bestD=Infinity;
+      points.forEach((q,qi)=>{
+        if(qi===idx) return;
+        const d = Math.hypot(p.x-q.x, p.y-q.y);
+        if(d < bestD && d < Math.max(W,H)*0.35){ bestD=d; best=q; }
+      });
+      if(best){
+        ctx.beginPath();
+        ctx.moveTo(p.x,p.y);
+        ctx.lineTo(best.x,best.y);
+        ctx.stroke();
+      }
+    }
+  });
+  ctx.restore();
+
+  // 7. bounding boxes around point clusters
+  if(showBoxes && boxCount>0){
+    ctx.save();
+    ctx.strokeStyle = hexToRgba(lineColor, lineOpacity);
+    ctx.lineWidth = 1;
+    const shuffled = [...points].sort(()=>rand()-0.5);
+    for(let b=0;b<boxCount;b++){
+      const anchor = shuffled[b % shuffled.length];
+      if(!anchor) continue;
+      const clusterSize = 2+Math.floor(rand()*4);
+      const near = points
+        .map(p=>({p, d:Math.hypot(p.x-anchor.x,p.y-anchor.y)}))
+        .sort((a,c)=>a.d-c.d)
+        .slice(0, clusterSize)
+        .map(o=>o.p);
+      const pad = 14 + rand()*26;
+      const minX = Math.min(...near.map(p=>p.x)) - pad;
+      const maxX = Math.max(...near.map(p=>p.x)) + pad;
+      const minY = Math.min(...near.map(p=>p.y)) - pad;
+      const maxY = Math.max(...near.map(p=>p.y)) + pad;
+      ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
+    }
+    ctx.restore();
+  }
+
+  // 8. draw points + labels on top
+  const fontSize = Math.max(10, Math.round(W*0.0095));
+  ctx.font = `${fontSize}px 'IBM Plex Mono', monospace`;
+  points.forEach(p=>{
+    ctx.save();
+    ctx.fillStyle = hexToRgba(lineColor, 0.9);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2.2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    if(rand() < labelProb){
+      const label = rand()<0.5
+        ? `${p.u.toFixed(3)}, ${p.v.toFixed(3)}`
+        : `${(rand()<0.5?p.u:p.v).toFixed(4)}`;
+      ctx.save();
+      ctx.fillStyle = hexToRgba(lineColor, 0.85);
+      ctx.fillText(label, p.x+8, p.y-6);
+      ctx.restore();
+    }
+  });
+
+  // 9. isometric cube marker, corner HUD
+  if(isoCube){
+    drawIsoCube(ctx, W*0.9, H*0.1, Math.min(W,H)*0.05, lineColor, lineOpacity);
+  }
+
+  // 10. outer frame
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(lineColor, lineOpacity*0.6);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5,0.5,W-1,H-1);
+  ctx.restore();
+}
+
+function buildJitteredLines(n, total, jitter, rand){
+  // n+1 line positions from 0..total, base uniform then jittered, kept monotonic
+  const base = [];
+  for(let i=0;i<=n;i++) base.push(i/n*total);
+  const cellSize = total/n;
+  const lines = base.map((v,i)=>{
+    if(i===0 || i===n) return v;
+    const j = (rand()*2-1) * jitter * cellSize * 0.4;
+    return v+j;
+  });
+  // enforce monotonic + min gap
+  for(let i=1;i<lines.length;i++){
+    if(lines[i] <= lines[i-1]+2) lines[i] = lines[i-1]+2;
+  }
+  lines[lines.length-1] = total;
+  return lines;
+}
+
+function desaturateCanvas(ctx, W, H, amount){
+  const data = ctx.getImageData(0,0,W,H);
+  const d = data.data;
+  for(let i=0;i<d.length;i+=4){
+    const gray = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+    d[i]   = d[i]   + (gray-d[i])*amount;
+    d[i+1] = d[i+1] + (gray-d[i+1])*amount;
+    d[i+2] = d[i+2] + (gray-d[i+2])*amount;
+  }
+  ctx.putImageData(data,0,0);
+}
+
+// low-res luminance-gradient map used to bias point placement toward edges
+function buildEdgeMap(image, size){
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const cx = c.getContext('2d');
+  cx.drawImage(image, 0, 0, size, size);
+  const data = cx.getImageData(0,0,size,size).data;
+  const gray = new Float32Array(size*size);
+  for(let i=0;i<size*size;i++){
+    gray[i] = data[i*4]*0.299 + data[i*4+1]*0.587 + data[i*4+2]*0.114;
+  }
+  const edge = new Float32Array(size*size);
+  let max = 1;
+  for(let y=1;y<size-1;y++){
+    for(let x=1;x<size-1;x++){
+      const idx = y*size+x;
+      const gx = gray[idx+1]-gray[idx-1];
+      const gy = gray[idx+size]-gray[idx-size];
+      const mag = Math.hypot(gx,gy);
+      edge[idx] = mag;
+      if(mag>max) max = mag;
+    }
+  }
+  for(let i=0;i<edge.length;i++) edge[i] /= max;
+  return {data:edge, size};
+}
+function sampleEdge(map, u, v){
+  const x = Math.min(map.size-1, Math.max(0, Math.floor(u*map.size)));
+  const y = Math.min(map.size-1, Math.max(0, Math.floor(v*map.size)));
+  return map.data[y*map.size+x];
+}
+
+function drawIsoCube(ctx, cx, cy, s, color, opacity){
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(color, opacity*0.7);
+  ctx.lineWidth = 1;
+  const top = [[cx,cy-s],[cx+s,cy-s*0.45],[cx,cy+s*0.1],[cx-s,cy-s*0.45]];
+  const pts = {
+    T:[cx, cy-s],
+    R:[cx+s, cy-s*0.4],
+    B:[cx, cy+s*0.2],
+    L:[cx-s, cy-s*0.4],
+    F:[cx, cy+s*1.1]
+  };
+  function line(a,b){ ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); }
+  line(pts.T,pts.R); line(pts.R,pts.F); line(pts.F,pts.L); line(pts.L,pts.T);
+  line(pts.T,pts.B); line(pts.R,pts.B); line(pts.L,pts.B); line(pts.F,pts.B);
+  ['T','R','B','L','F'].forEach(k=>{
+    ctx.beginPath();
+    ctx.arc(pts[k][0], pts[k][1], 2, 0, Math.PI*2);
+    ctx.fillStyle = hexToRgba(color, opacity);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function hexToRgba(hex, alpha){
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+</script>
+</body>
+</html>
